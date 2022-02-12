@@ -25,10 +25,11 @@ static void InterruptHandler(int signo) {
 }
 
 void write7x5 (int iStart, int jStart, Canvas *canvas) {
-  string aBitString = "11110100011000111111100011000111110";
-  for (int i = 0; i < 7; i++) {
-    for (int j = 0; j < 5; j++) {
-      bool val = aBitString[(i * 5) + j] == '1';
+  string bitString = "000000000000000000000000000001111100111110011111001000000100000010001001000100100000010000001000100100010010000001000000100010010001001000000100000010001001000100100000010000001000100100010010000001111100111110011111001111100000000000000000000000000000";
+  // 9 rows 28 cols
+  for (int i = 0; i < 9; i++) {
+    for (int j = 0; j < 28; j++) {
+      bool val = bitString[(i * 28) + j] == '1';
       canvas->SetPixel(j + jStart, i + iStart, val ? 255 : 0, 0, 0);
     }
   }
