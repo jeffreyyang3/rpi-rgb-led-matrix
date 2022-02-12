@@ -11,7 +11,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <signal.h>
+#include <bitset>
+#include <iostream>
+#define msToSec 1000000
 
+using namespace std;
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::Canvas;
 
@@ -20,27 +24,36 @@ static void InterruptHandler(int signo) {
   interrupt_received = true;
 }
 
+void write7x5 (int iStart, int jStart, Canvas *canvas) {
+  string aBitString = "11110100011000111111100011000111110";
+  for (int i = 0; i < 7; i++) {
+    for (int j = 0; j < 5; j++) {
+      bool val = aBitString[(i * 5) + j] == '1';
+      canvas->SetPixel(j + jStart, i + iStart, val ? 255 : 0, 0, 0);
+    }
+  }
+}
+
 static void DrawOnCanvas(Canvas *canvas) {
   /*
    * Let's create a simple animation. We use the canvas to draw
    * pixels. We wait between each step to have a slower animation.
    */
-  canvas->Fill(0, 0, 255);
-
+  canvas->Fill(0, 0, 0);
   int center_x = canvas->width() / 2;
-  int center_y = canvas->height() / 2;
-  float radius_max = canvas->width() / 2;
-  float angle_step = 1.0 / 360;
-  for (float a = 0, r = 0; r < radius_max; a += angle_step, r += angle_step) {
-    if (interrupt_received)
+
+  while (true) {
+    if (interrupt_received) {
+      cout << "interrupt received" << endl;
       return;
-    float dot_x = cos(a * 2 * M_PI) * r;
-    float dot_y = sin(a * 2 * M_PI) * r;
-    canvas->SetPixel(center_x + dot_x, center_y + dot_y,
-                     255, 0, 0);
-    usleep(1 * 1000);  // wait a little to slow down things.
+    };
+    write7x5(2,2, canvas);
+    usleep(2 * msToSec);
   }
+
 }
+
+
 
 int main(int argc, char *argv[]) {
   RGBMatrix::Options defaults;
