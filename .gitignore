@@ -2,3 +2,4 @@
 *.a
 *~
 *.so
+*/node_modules
