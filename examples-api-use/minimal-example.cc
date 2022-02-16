@@ -12,15 +12,19 @@
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
+#include <sw/redis++/redis++.h>
 #include <unistd.h>
 #define msToSec 1000000
 using namespace std;
+using namespace sw::redis;
 using rgb_matrix::Canvas;
 using rgb_matrix::RGBMatrix;
-pthread_mutex_t lock;
+pthread_mutex_t writeLock;
 bool blue = true;
 volatile bool interrupt_received = false;
 static void InterruptHandler(int signo) { interrupt_received = true; }
+// g++ -std=c++17 index.cpp -lhiredis -lredis++ -lpthread
+// -I/home/pi/redis-plus-plus/build && ./a.out
 
 void write7x5(int iStart, int jStart, Canvas *canvas) {
   string bitString =
@@ -30,7 +34,7 @@ void write7x5(int iStart, int jStart, Canvas *canvas) {
       "001000100100010010000000010000111100011111001111100111110000100000000000"
       "000000000000000000000000000";
   // 9 rows 28 cols
-  pthread_mutex_lock(&lock);
+  pthread_mutex_lock(&writeLock);
   for (int i = 0; i < 9; i++) {
     for (int j = 0; j < 35; j++) {
       bool val = bitString[(i * 35) + j] == '1';
@@ -42,7 +46,7 @@ void write7x5(int iStart, int jStart, Canvas *canvas) {
       }
     }
   }
-  pthread_mutex_unlock(&lock);
+  pthread_mutex_unlock(&writeLock);
 }
 
 static void DrawOnCanvas(Canvas *canvas) {
@@ -62,18 +66,29 @@ static void DrawOnCanvas(Canvas *canvas) {
   }
 }
 
-void *stdinReader(void *threadid) {
+void *redisSubscriberThreadFunc(void *threadid) {
   cout << "thread id " + (long)threadid << endl;
   string input;
-  while (!interrupt_received) {
-    getline(cin, input);
-    pthread_mutex_lock(&lock);
-    if (input == "c") {
+  auto redis = Redis("tcp://127.0.0.1:6379");
+  auto sub = redis.subscriber();
+  sub.subscribe({"dataChannel"});
+  sub.on_message([](string channel, string msg) {
+    pthread_mutex_lock(&writeLock);
+    cout << "received message: " << msg << "from channel:" << channel << endl;
+    if (msg == "c") {
       blue = !blue;
     } else {
-      cout << "input was " + input << endl;
+      cout << "the input was " + msg << endl;
     }
-    pthread_mutex_unlock(&lock);
+    pthread_mutex_unlock(&writeLock);
+  });
+
+  while (!interrupt_received) {
+    try {
+      sub.consume();
+    } catch (const Error &err) {
+      cout << err.what() << endl;
+    }
   }
   pthread_exit(NULL);
 }
@@ -95,8 +110,9 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
 
-  pthread_t readerThread;
-  pthread_create(&readerThread, NULL, &stdinReader, NULL);
+  pthread_t redisSubscriberThread;
+  pthread_create(&redisSubscriberThread, NULL, &redisSubscriberThreadFunc,
+                 NULL);
   DrawOnCanvas(canvas); // Using the canvas.
   // Animation finished. Shut down the RGB matrix.
   canvas->Clear();
