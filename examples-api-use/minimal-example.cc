@@ -65,23 +65,21 @@ static void DrawOnCanvas(Canvas *canvas) {
     // usleep(2 * msToSec);
   }
 }
+void processRedisMessage(string channel, string msg) {
+  cout << endl << "Channel is " + channel << endl << "Msg is " + msg << endl;
 
+  pthread_mutex_lock(&writeLock);
+  if (msg == "c")
+    blue = !blue;
+  pthread_mutex_unlock(&writeLock);
+}
 void *redisSubscriberThreadFunc(void *threadid) {
   cout << "thread id " + (long)threadid << endl;
   string input;
   auto redis = Redis("tcp://127.0.0.1:6379");
   auto sub = redis.subscriber();
   sub.subscribe({"dataChannel"});
-  sub.on_message([](string channel, string msg) {
-    pthread_mutex_lock(&writeLock);
-    cout << "received message: " << msg << "from channel:" << channel << endl;
-    if (msg == "c") {
-      blue = !blue;
-    } else {
-      cout << "the input was " + msg << endl;
-    }
-    pthread_mutex_unlock(&writeLock);
-  });
+  sub.on_message(processRedisMessage);
 
   while (!interrupt_received) {
     try {
