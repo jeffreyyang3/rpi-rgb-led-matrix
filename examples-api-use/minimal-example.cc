@@ -10,6 +10,7 @@
 #include <bitset>
 #include <iostream>
 #include <math.h>
+#include <regex>
 #include <signal.h>
 #include <stdio.h>
 #include <sw/redis++/redis++.h>
@@ -23,21 +24,52 @@ pthread_mutex_t writeLock;
 bool blue = true;
 volatile bool interrupt_received = false;
 static void InterruptHandler(int signo) { interrupt_received = true; }
+
+struct matrixData {
+  string data;
+  int rows;
+  int cols;
+};
 // g++ -std=c++17 index.cpp -lhiredis -lredis++ -lpthread
 // -I/home/pi/redis-plus-plus/build && ./a.out
+struct matrixData matrixDataVals(string str) {
+  regex e("((?:0|1)*),(\\d+),(\\d+)");
+  smatch sm;
+  regex_match(str, sm, e);
+  matrixData result;
+  result.data = sm[1];
+  result.rows = stoi(sm[2]);
+  result.cols = stoi(sm[3]);
+  return result;
+};
 
 void write7x5(int iStart, int jStart, Canvas *canvas) {
-  string bitString =
-      "000000000000000000000000000000000000111100011111001111100111110010001001"
-      "000100100010010001001000000100010010001001000100100010010000000101000111"
-      "110010001001000100111110000100001000100100010010001001000000001000010001"
-      "001000100100010010000000010000111100011111001111100111110000100000000000"
-      "000000000000000000000000000";
+  string infoString =
+      "000000000000000000000000000000000000000000011110000111000111100001110000"
+      "000000000000010001001000100100010010001000000000000000010001001000100100"
+      "010010001000000000000000011111001111100111110011111000000000000000010001"
+      "001000100100010010001000000000000000010001001000100100010010001000000000"
+      "000000011110001000100111100010001000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000011110001111"
+      "100111110011111001000100000000010001001000100100010010000001000100000000"
+      "010001001000100100010010000000101000000000011111001000100100010011111000"
+      "010000000000010001001000100100010010000000010000000000010001001000100100"
+      "010010000000010000000000011110001111100111110011111000010000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000100000111000111110010001001111100111110001100001000100000010010"
+      "001001000000100000010100000000100000010010001001000000100000000100000001"
+      "000111110011111001111000111110000100000010000000010000001000000100100010"
+      "000100000100000000010000001000000100100010011111001111100111110000001001"
+      "111100111110000000000000000000000000000000000000000000,27,42";
+  auto parsed = matrixDataVals(infoString);
+  string bitString = parsed.data;
+  int rows = parsed.rows;
+  int cols = parsed.cols;
   // 9 rows 28 cols
   pthread_mutex_lock(&writeLock);
-  for (int i = 0; i < 9; i++) {
-    for (int j = 0; j < 35; j++) {
-      bool val = bitString[(i * 35) + j] == '1';
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < cols; j++) {
+      bool val = bitString[(i * cols) + j] == '1';
       if (blue)
         canvas->SetPixel(j + jStart, i + iStart, 0, val ? 255 : 0,
                          val ? 255 : 0);
@@ -62,7 +94,7 @@ static void DrawOnCanvas(Canvas *canvas) {
       return;
     };
     write7x5(0, 0, canvas);
-    // usleep(2 * msToSec);
+    usleep(msToSec / 3);
   }
 }
 void processRedisMessage(string channel, string msg) {
@@ -98,6 +130,7 @@ int main(int argc, char *argv[]) {
   defaults.chain_length = 1;
   defaults.parallel = 1;
   defaults.show_refresh_rate = true;
+
   Canvas *canvas = RGBMatrix::CreateFromFlags(&argc, &argv, &defaults);
   if (canvas == NULL)
     return 1;
